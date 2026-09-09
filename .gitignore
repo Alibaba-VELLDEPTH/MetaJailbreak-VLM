@@ -1,0 +1,19 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*token*
+
+# Runtime artifacts
+logs/
+results/
+MAMJ_ASP_Evlove/
+eval_renders/
+__pycache__/
+*.pyc
+
+# Local or restricted datasets
+# Keep the directory layout, but do not publish task data by default.
+data/
