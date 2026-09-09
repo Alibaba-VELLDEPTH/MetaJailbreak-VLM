@@ -1,211 +1,95 @@
-# Standalone MAMJ Reflective Optimizer
+# MetaJailbreak-VLM
 
-This repository contains a standalone extraction of the MAMJ reflective-mutation optimizer used by the original project.
+Multimodal model safety evaluation and reflective optimization toolkit.
+Use with systems, accounts, data, and APIs for which you have authorization.
 
-The standalone optimizer does not import the MAMJ package at runtime.
+## Install
 
-> **Authorized-use notice**
->
-> This project is intended for authorized multimodal model safety evaluation only. Use it only with systems, accounts, data, and APIs for which you have permission.
-
-## Files
-
-### `strict_MAMJ_reflective_optimizer.py`
-
-Standalone implementation of the project-specific reflective optimizer, including:
-
-* Pareto candidate selection
-* in-memory candidate pool
-* candidate lineage
-* minibatch sampling
-* failed-trajectory reflective feedback
-* teacher prompt generation and response parsing
-* candidate acceptance and validation
-* metric-call budget tracking
-* runtime trace metadata
-
-### `run_optimize_standalone.py`
-
-Main runner.
-
-It:
-
-* loads JSON task files
-* creates a deterministic category-stratified train/validation split
-* initializes the adapter and teacher model
-* runs the optimizer
-* saves the best candidate to JSON
-
-### `vlm_attack_adapter_standalone.py`
-
-Project-specific model and API adapter.
-
-### `failure_feedback_optimizer.py`
-
-Earlier simplified optimizer implementation. It does not include the Pareto candidate pool and should not be used when strict equivalence with the original optimizer is required.
-
-## Requirements
-
-Python 3.10 or newer is recommended.
-
-Install the required packages:
+Python 3.10 or newer:
 
 ```bash
-python -m pip install requests pillow numpy openai
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+python -m pip install -e .
+metajailbreak --help
+metajailbreak --smoke-test
 ```
 
-## Task Data
-
-The runner expects a directory containing JSON files.
-
-Each task must contain one of the following fields:
-
-* `changed_question`
-* `Changed Question`
-* `Question`
-
-Tasks are converted internally to:
-
-```json
-{
-  "task_id": "category_entry_id",
-  "instruction": "the task instruction",
-  "category": "category_name",
-  "source": "Train"
-}
-```
-
-Example:
-
-```text
-data/
-└── train_data/
-    ├── category_a.json
-    ├── category_b.json
-    └── category_c.json
-```
-
-The default split uses:
-
-* 2 validation examples per category
-* all remaining examples for training
-* random seed `0`
-
-## Configuration
-
-Configure the model clients in `run_optimize_standalone.py`.
-
-Example:
-
-```python
-args = argparse.Namespace(
-    attacker_model_name="...",
-    attacker_model_url="https://.../v1",
-    attacker_model_key=os.environ["ATTACKER_MODEL_API_KEY"],
-
-    victim_model_name="...",
-    victim_model_url="https://.../v1",
-    victim_model_key=os.environ["VICTIM_MODEL_API_KEY"],
-
-    feedback_model_name="...",
-    feedback_model_url="https://.../v1",
-    feedback_model_key=os.environ["FEEDBACK_MODEL_API_KEY"],
-
-    Image_Generation_Model="...",
-    Image_Generation_Model_base_url="https://...",
-    Image_Generation_Model_api_key=os.environ["IMAGE_MODEL_API_KEY"],
-)
-```
-
-Do not hard-code API keys in source files.
-
-Use environment variables or a local `.env` file that is excluded from Git.
+The smoke test runs evaluation, reflection, candidate acceptance, and validation
+with synthetic responses, entirely offline. It does not test live API availability.
 
 ## Run
 
-### Linux / macOS
+Copy `.env.example` to `.env` and fill in credentials, model names, and endpoints.
+Supply your own task directory; see [data format](data/README.md).
 
 ```bash
-export VLM_TRAIN_DIR="./data/train_data"
-export VLM_MAX_METRIC_CALLS=6
-export VLM_MINIBATCH_SIZE=3
-export VLM_TRACE=0
-export VLM_SEED_STRATEGY="./seed_candidate.json"
-export VLM_OUTPUT_STRATEGY="./results/best_strategy_standalone.json"
-export PYTHONPATH="."
-
-python ./run_optimize_standalone.py
+cp .env.example .env
+metajailbreak --train-dir /absolute/path/to/tasks --check
+metajailbreak --train-dir /absolute/path/to/tasks --max-metric-calls 156
 ```
 
-### Windows PowerShell
+`--check` validates local settings and data without making API calls. Actual
+execution makes paid API requests. Metric calls count evaluated samples, not API
+requests, tokens, or money. The inherited optimizer finishes evaluation batches
+and may exceed this budget; it is not a hard spending cap.
 
-```powershell
-$env:VLM_TRAIN_DIR = ".\data\train_data"
-$env:VLM_MAX_METRIC_CALLS = "6"
-$env:VLM_MINIBATCH_SIZE = "3"
-$env:VLM_TRACE = "0"
-$env:VLM_SEED_STRATEGY = ".\seed_candidate.json"
-$env:VLM_OUTPUT_STRATEGY = ".\results\best_strategy_standalone.json"
-$env:PYTHONPATH = "."
+Relative paths resolve from the **current working directory**. Shell variables
+override `.env`; CLI path and budget options override both. `--env-file` selects
+another configuration file. Two records per category become validation data,
+with the rest used for training (seed 0). Each category needs at least three tasks.
 
-python .\run_optimize_standalone.py
-```
+| Environment variable | Default |
+| --- | --- |
+| `VLM_TRAIN_DIR` | `data/train_data` |
+| `VLM_SEED_STRATEGY` | `configs/seed_candidate.json` |
+| `VLM_OUTPUT_STRATEGY` | `results/best_strategy_standalone.json` |
+| `VLM_MAX_METRIC_CALLS` | `156` |
+| `VLM_MINIBATCH_SIZE` | `3` |
+| `VLM_TRACE` | `1`; set to `0` to disable |
 
-Start with a small metric-call budget to verify the configuration before increasing it.
+The default seed falls back to the equivalent built-in configuration for wheel
+installations. Explicitly configured missing paths cause an error.
+Logs go to `logs/`, best strategies to `results/`, and evaluation artifacts to
+`MAMJ_ASP_Evlove/eval_renders/`. These directories are ignored by Git.
+Traces can contain prompts and model responses.
 
-## Environment Variables
-
-| Variable               |                         Default | Description                        |
-| ---------------------- | ------------------------------: | ---------------------------------- |
-| `VLM_TRAIN_DIR`        |                   auto-detected | Task JSON directory                |
-| `VLM_SEED_STRATEGY`    |           `seed_candidate.json` | Seed candidate JSON                |
-| `VLM_OUTPUT_STRATEGY`  | `best_strategy_standalone.json` | Best candidate output path         |
-| `VLM_MAX_METRIC_CALLS` |                           `156` | Maximum metric-call budget         |
-| `VLM_MINIBATCH_SIZE`   |                             `3` | Reflection minibatch size          |
-| `VLM_TRACE`            |                             `1` | Set to `0` to disable trace output |
-
-## Output
-
-The runner generates:
-
-* the best candidate JSON
-* runtime logs under `logs/`
-* task results and generated images under:
+## Layout
 
 ```text
-MAMJ_ASP_Evlove/eval_renders/
+configs/seed_candidate.json       Reference seed configuration
+src/metajailbreak_vlm/
+  cli.py                         CLI and local checks
+  config.py                      Environment configuration
+  data.py                        Task loading and deterministic split
+  runner.py                      Experiment orchestration
+  adapter.py                     Existing multimodal evaluation flow
+  clients.py                     Chat and image API clients
+  images.py                      Image encoding and response parsing
+  prompts.py                     Existing prompt constants
+  types.py                       Evaluation trajectory type
+  evaluation.py                  Auxiliary judge helper
+  optimizers/reflective.py        Primary optimizer
+  optimizers/legacy.py            Earlier simplified optimizer
+  smoke.py                       Offline optimizer check
+tests/                           Offline regression tests
+.github/workflows/tests.yml       Python 3.10 / 3.12 CI
 ```
 
-Generated files should not be committed to the repository.
+After installation, `python -m metajailbreak_vlm` and the legacy command
+`python run_optimize_standalone.py` invoke the same CLI. Old direct imports move
+to the package modules listed above. The legacy optimizer is retained for reference.
 
-## Before Publishing
+## Development
 
-Do not commit:
-
-* API keys or access tokens
-* `.env`
-* logs
-* generated images
-* result files
-* private or restricted datasets
-
-Recommended `.gitignore` entries:
-
-```gitignore
-.env
-logs/
-results/
-MAMJ_ASP_Evlove/
+```bash
+python -m pip install -e '.[dev]'
+pytest -q
+ruff check src tests
+python -m build
 ```
 
-Rotate any credential that has previously been committed or included in logs.
-
-## Notes
-
-The standalone optimizer was designed to preserve the behavior required by the original project configuration.
-
-External model APIs are nondeterministic, so real runs may produce different text, images, and model responses even with the same configuration.
-
-## License
-
-Add an appropriate repository license and verify compatibility with the licenses of any datasets, model clients, MAMJ-derived components, and copied project code.
+Tests mock network transport and require no credentials. Live provider
+compatibility and research results require a separately configured real run.
+No open-source license has been declared yet; rights holders must establish
+licensing and third-party provenance before granting reuse rights.

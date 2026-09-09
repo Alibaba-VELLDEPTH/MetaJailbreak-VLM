@@ -22,7 +22,7 @@ from __future__ import annotations
 import random
 import re
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping, Protocol, Sequence
+from typing import Any, Mapping, Protocol, Sequence
 
 
 Candidate = dict[str, str]
@@ -135,16 +135,24 @@ class FailureFeedbackOptimizer:
         self.components = list(components) if components is not None else None
         self.component_selector = component_selector
         self.perfect_score = perfect_score
-        self.reflection_prompt_template = reflection_prompt_template or DEFAULT_REFLECTION_PROMPT
+        self.reflection_prompt_template = (
+            reflection_prompt_template or DEFAULT_REFLECTION_PROMPT
+        )
         self.rng = random.Random(seed)
         self.verbose = verbose
 
     @staticmethod
     def _validate_template(template: str) -> None:
-        required = ("<curr_instructions>", "<inputs_outputs_feedback>", "<component_name>")
+        required = (
+            "<curr_instructions>",
+            "<inputs_outputs_feedback>",
+            "<component_name>",
+        )
         missing = [item for item in required if item not in template]
         if missing:
-            raise ValueError(f"Reflection prompt is missing placeholder(s): {', '.join(missing)}")
+            raise ValueError(
+                f"Reflection prompt is missing placeholder(s): {', '.join(missing)}"
+            )
 
     @staticmethod
     def _render_value(value: Any, level: int = 3) -> str:
@@ -152,13 +160,17 @@ class FailureFeedbackOptimizer:
             rendered = []
             for key, item in value.items():
                 rendered.append(f"{'#' * level} {key}\n")
-                rendered.append(FailureFeedbackOptimizer._render_value(item, min(level + 1, 6)))
+                rendered.append(
+                    FailureFeedbackOptimizer._render_value(item, min(level + 1, 6))
+                )
             return "".join(rendered) or "\n"
         if isinstance(value, (list, tuple)):
             rendered = []
             for index, item in enumerate(value, 1):
                 rendered.append(f"{'#' * level} Item {index}\n")
-                rendered.append(FailureFeedbackOptimizer._render_value(item, min(level + 1, 6)))
+                rendered.append(
+                    FailureFeedbackOptimizer._render_value(item, min(level + 1, 6))
+                )
             return "".join(rendered) or "\n"
         return f"{str(value).strip()}\n\n"
 
@@ -180,8 +192,7 @@ class FailureFeedbackOptimizer:
         dataset: Sequence[Mapping[str, Any]],
     ) -> str:
         return (
-            self.reflection_prompt_template
-            .replace("<component_name>", component_name)
+            self.reflection_prompt_template.replace("<component_name>", component_name)
             .replace("<curr_instructions>", current_instruction)
             .replace("<inputs_outputs_feedback>", self._render_dataset(dataset))
         )
@@ -250,9 +261,13 @@ class FailureFeedbackOptimizer:
         for component_name in component_names:
             records = list(reflective_data.get(component_name, []))
             if not records:
-                self._log(f"No failed feedback for component {component_name}; skipping")
+                self._log(
+                    f"No failed feedback for component {component_name}; skipping"
+                )
                 continue
-            prompt = self._build_reflection_prompt(component_name, candidate[component_name], records)
+            prompt = self._build_reflection_prompt(
+                component_name, candidate[component_name], records
+            )
             revised = self._extract_revised_instruction(self.reflection_lm(prompt))
             if revised and revised != candidate[component_name]:
                 proposed[component_name] = revised
@@ -260,7 +275,12 @@ class FailureFeedbackOptimizer:
 
         return proposed if changed else None
 
-    def optimize(self, seed_candidate: Mapping[str, str], trainset: Sequence[Any], valset: Sequence[Any] | None = None) -> OptimizationResult:
+    def optimize(
+        self,
+        seed_candidate: Mapping[str, str],
+        trainset: Sequence[Any],
+        valset: Sequence[Any] | None = None,
+    ) -> OptimizationResult:
         candidate = dict(seed_candidate)
         train_data = list(trainset)
         validation_data = list(valset) if valset is not None else train_data
@@ -269,7 +289,9 @@ class FailureFeedbackOptimizer:
         if not validation_data:
             raise ValueError("valset must not be empty")
 
-        initial_validation = self.evaluator(validation_data, candidate, capture_traces=False)
+        initial_validation = self.evaluator(
+            validation_data, candidate, capture_traces=False
+        )
         best_score = self._mean(initial_validation.scores)
         history: list[OptimizationStep] = []
         best_candidate = candidate.copy()
@@ -281,14 +303,36 @@ class FailureFeedbackOptimizer:
             failed_count = len(self._failed_indices(current))
             component_names = self._select_components(candidate, iteration)
 
-            if failed_count == 0 or all(score >= self.perfect_score for score in current.scores):
-                history.append(OptimizationStep(iteration, component_names, failed_count, score_before, None, False, candidate.copy()))
+            if failed_count == 0 or all(
+                score >= self.perfect_score for score in current.scores
+            ):
+                history.append(
+                    OptimizationStep(
+                        iteration,
+                        component_names,
+                        failed_count,
+                        score_before,
+                        None,
+                        False,
+                        candidate.copy(),
+                    )
+                )
                 self._log(f"Iteration {iteration}: no failed cases; stopping")
                 break
 
             proposed = self._propose_candidate(candidate, current, component_names)
             if proposed is None:
-                history.append(OptimizationStep(iteration, component_names, failed_count, score_before, None, False, candidate.copy()))
+                history.append(
+                    OptimizationStep(
+                        iteration,
+                        component_names,
+                        failed_count,
+                        score_before,
+                        None,
+                        False,
+                        candidate.copy(),
+                    )
+                )
                 self._log(f"Iteration {iteration}: reflection produced no change")
                 continue
 
@@ -297,20 +341,34 @@ class FailureFeedbackOptimizer:
             accepted = score_after > score_before
             if accepted:
                 candidate = proposed
-                validation = self.evaluator(validation_data, candidate, capture_traces=False)
+                validation = self.evaluator(
+                    validation_data, candidate, capture_traces=False
+                )
                 validation_score = self._mean(validation.scores)
                 if validation_score >= best_score:
                     best_score = validation_score
                     best_candidate = candidate.copy()
 
-            history.append(OptimizationStep(iteration, component_names, failed_count, score_before, score_after, accepted, candidate.copy()))
+            history.append(
+                OptimizationStep(
+                    iteration,
+                    component_names,
+                    failed_count,
+                    score_before,
+                    score_after,
+                    accepted,
+                    candidate.copy(),
+                )
+            )
             self._log(
                 f"Iteration {iteration}: failed={failed_count}, "
                 f"minibatch {score_before:.3f}->{score_after:.3f}, "
                 f"{'accepted' if accepted else 'rejected'}"
             )
 
-        return OptimizationResult(best_candidate=best_candidate, best_score=best_score, history=history)
+        return OptimizationResult(
+            best_candidate=best_candidate, best_score=best_score, history=history
+        )
 
     @staticmethod
     def _mean(scores: Sequence[float]) -> float:

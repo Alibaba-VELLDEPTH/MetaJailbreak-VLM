@@ -1,0 +1,5 @@
+include .env.example
+include run_optimize_standalone.py
+include configs/seed_candidate.json
+include data/README.md
+recursive-include tests *.py

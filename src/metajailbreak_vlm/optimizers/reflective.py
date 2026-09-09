@@ -92,8 +92,14 @@ class EpochShuffledBatchSampler:
         if size == 0:
             raise ValueError("Cannot sample a minibatch from an empty trainset")
         base_idx = state_i * self.minibatch_size
-        current_epoch = 0 if self.epoch == -1 else base_idx // max(len(self.shuffled_ids), 1)
-        if not self.shuffled_ids or size != self.last_trainset_size or current_epoch > self.epoch:
+        current_epoch = (
+            0 if self.epoch == -1 else base_idx // max(len(self.shuffled_ids), 1)
+        )
+        if (
+            not self.shuffled_ids
+            or size != self.last_trainset_size
+            or current_epoch > self.epoch
+        ):
             self.epoch = current_epoch
             self._update_shuffled(size)
         base_idx %= len(self.shuffled_ids)
@@ -103,7 +109,9 @@ class EpochShuffledBatchSampler:
         return self.shuffled_ids[base_idx:end_idx]
 
 
-def _is_dominated(program: int, programs: set[int], fronts: Mapping[Any, set[int]]) -> bool:
+def _is_dominated(
+    program: int, programs: set[int], fronts: Mapping[Any, set[int]]
+) -> bool:
     program_fronts = [front for front in fronts.values() if program in front]
     for front in program_fronts:
         if not any(other in programs for other in front):
@@ -111,7 +119,9 @@ def _is_dominated(program: int, programs: set[int], fronts: Mapping[Any, set[int
     return True
 
 
-def _remove_dominated(fronts: Mapping[Any, set[int]], scores: Sequence[float]) -> dict[Any, set[int]]:
+def _remove_dominated(
+    fronts: Mapping[Any, set[int]], scores: Sequence[float]
+) -> dict[Any, set[int]]:
     frequency: dict[int, int] = {}
     for front in fronts.values():
         for program in front:
@@ -144,7 +154,9 @@ def _select_pareto_candidate(
     for front in reduced.values():
         for program in front:
             frequencies[program] = frequencies.get(program, 0) + 1
-    sampling_list = [program for program, count in frequencies.items() for _ in range(count)]
+    sampling_list = [
+        program for program, count in frequencies.items() for _ in range(count)
+    ]
     if not sampling_list:
         raise AssertionError("No candidate survived the Pareto front")
     return rng.choice(sampling_list)
@@ -205,13 +217,17 @@ class StrictMAMJReflectiveOptimizer:
             result = ""
             for key, item in value.items():
                 result += f"{'#' * level} {key}\n"
-                result += StrictMAMJReflectiveOptimizer._render_value(item, min(level + 1, 6))
+                result += StrictMAMJReflectiveOptimizer._render_value(
+                    item, min(level + 1, 6)
+                )
             return result or "\n"
         if isinstance(value, (list, tuple)):
             result = ""
             for index, item in enumerate(value):
                 result += f"{'#' * level} Item {index + 1}\n"
-                result += StrictMAMJReflectiveOptimizer._render_value(item, min(level + 1, 6))
+                result += StrictMAMJReflectiveOptimizer._render_value(
+                    item, min(level + 1, 6)
+                )
             return result or "\n"
         return f"{str(value).strip()}\n\n"
 
@@ -237,7 +253,9 @@ class StrictMAMJReflectiveOptimizer:
                 continue
             prompt = self.template.replace("<component_name>", component)
             prompt = prompt.replace("<curr_instructions>", candidate[component])
-            prompt = prompt.replace("<inputs_outputs_feedback>", self._render_dataset(records))
+            prompt = prompt.replace(
+                "<inputs_outputs_feedback>", self._render_dataset(records)
+            )
             self._trace(
                 "reflection_prompt",
                 component=component,
@@ -257,7 +275,7 @@ class StrictMAMJReflectiveOptimizer:
             else:
                 content = raw[start:end]
                 language = re.match(r"^\S*\n", content)
-                revised = content[language.end():] if language else content
+                revised = content[language.end() :] if language else content
                 revised = revised.strip()
             proposed[component] = revised
         return proposed
@@ -266,7 +284,12 @@ class StrictMAMJReflectiveOptimizer:
     def _mean(scores: Sequence[float]) -> float:
         return sum(scores) / len(scores) if scores else float("-inf")
 
-    def optimize(self, seed_candidate: Mapping[str, str], trainset: Sequence[Any], valset: Sequence[Any]) -> StrictResult:
+    def optimize(
+        self,
+        seed_candidate: Mapping[str, str],
+        trainset: Sequence[Any],
+        valset: Sequence[Any],
+    ) -> StrictResult:
         train_data = list(trainset)
         val_data = list(valset)
         candidate = dict(seed_candidate)
@@ -296,7 +319,10 @@ class StrictMAMJReflectiveOptimizer:
             iteration += 1
             selected_index = _select_pareto_candidate(
                 pareto_fronts,
-                [self._mean(list(scores.values())) for scores in val_scores_by_candidate],
+                [
+                    self._mean(list(scores.values()))
+                    for scores in val_scores_by_candidate
+                ],
                 self.rng,
             )
             current_candidate = candidates[selected_index]
@@ -329,14 +355,18 @@ class StrictMAMJReflectiveOptimizer:
             if current_eval.trajectories is None or len(current_eval.trajectories) == 0:
                 self._trace("skip_no_trajectories", iteration=iteration)
                 continue
-            if self.skip_perfect_score and all(score >= self.perfect_score for score in current_eval.scores):
+            if self.skip_perfect_score and all(
+                score >= self.perfect_score for score in current_eval.scores
+            ):
                 self._trace("skip_perfect_score", iteration=iteration)
                 continue
 
             try:
                 new_candidate = self._proposal(current_candidate, current_eval)
             except Exception as exc:
-                self._trace("reflection_exception", iteration=iteration, error=repr(exc))
+                self._trace(
+                    "reflection_exception", iteration=iteration, error=repr(exc)
+                )
                 continue
 
             new_eval = self.evaluator(batch, new_candidate, False)
@@ -352,7 +382,12 @@ class StrictMAMJReflectiveOptimizer:
             old_sum = sum(current_eval.scores)
             new_sum = sum(new_eval.scores)
             if new_sum <= old_sum:
-                self._trace("candidate_rejected", iteration=iteration, old_sum=old_sum, new_sum=new_sum)
+                self._trace(
+                    "candidate_rejected",
+                    iteration=iteration,
+                    old_sum=old_sum,
+                    new_sum=new_sum,
+                )
                 continue
 
             full_eval = self.evaluator(val_data, new_candidate, False)
@@ -364,13 +399,22 @@ class StrictMAMJReflectiveOptimizer:
             val_scores = {index: score for index, score in enumerate(full_eval.scores)}
             val_scores_by_candidate.append(val_scores)
             for val_id, score in val_scores.items():
-                previous = max((scores[val_id] for scores in val_scores_by_candidate[:-1] if val_id in scores), default=float("-inf"))
+                previous = max(
+                    (
+                        scores[val_id]
+                        for scores in val_scores_by_candidate[:-1]
+                        if val_id in scores
+                    ),
+                    default=float("-inf"),
+                )
                 if score > previous:
                     pareto_fronts[val_id] = {new_index}
                 elif score == previous:
                     pareto_fronts.setdefault(val_id, set()).add(new_index)
             iteration_trace["new_program_idx"] = new_index
-            iteration_trace["evaluated_val_indices"] = list(range(len(full_eval.scores)))
+            iteration_trace["evaluated_val_indices"] = list(
+                range(len(full_eval.scores))
+            )
             self._trace(
                 "candidate_accepted",
                 iteration=iteration,
@@ -382,9 +426,18 @@ class StrictMAMJReflectiveOptimizer:
                 metric_calls=metric_calls,
             )
 
-        aggregate_scores = [self._mean(list(scores.values())) for scores in val_scores_by_candidate]
-        best_index = max(range(len(aggregate_scores)), key=lambda index: aggregate_scores[index])
-        self._trace("optimization_finished", metric_calls=metric_calls, best_candidate=best_index, aggregate_scores=aggregate_scores)
+        aggregate_scores = [
+            self._mean(list(scores.values())) for scores in val_scores_by_candidate
+        ]
+        best_index = max(
+            range(len(aggregate_scores)), key=lambda index: aggregate_scores[index]
+        )
+        self._trace(
+            "optimization_finished",
+            metric_calls=metric_calls,
+            best_candidate=best_index,
+            aggregate_scores=aggregate_scores,
+        )
         return StrictResult(
             best_candidate=candidates[best_index],
             best_score=aggregate_scores[best_index],

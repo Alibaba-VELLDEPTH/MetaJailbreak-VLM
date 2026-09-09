@@ -16,4 +16,11 @@ __pycache__/
 
 # Local or restricted datasets
 # Keep the directory layout, but do not publish task data by default.
-data/
+data/*
+!data/README.md
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
