@@ -34,6 +34,11 @@ Multimodal jailbreak evaluation often adapts individual image–text inputs whil
 MAMJ uses two stages. First, diagnostic feedback from groups of trajectories refines the attack strategy prompt while the attacker weights remain frozen. Second, the optimized strategy conditions reinforcement learning of the attacker. This connects qualitative strategy refinement with quantitative policy optimization.
 
 <p align="center">
+  <img src="assets/main.png" alt="MAMJ framework: adaptive attack strategy prompt optimization and GRPO-based attacker policy learning" width="95%" />
+</p>
+<p align="center"><em>MAMJ framework: group-level diagnostic feedback refines the attack strategy prompt, followed by reinforcement learning of the attacker with the optimized strategy fixed.</em></p>
+
+<p align="center">
   <img src="assets/training_curve.png" alt="GRPO training curve showing mean reward, its five-step moving average, and policy entropy" width="95%" />
 </p>
 <p align="center"><em>Attacker training dynamics: mean reward and its five-step moving average increase while policy entropy generally decreases over GRPO update steps.</em></p>
@@ -64,6 +69,7 @@ These values follow the local manuscript, [`acl_latex (1).tex`](../acl_latex%20%
 | Official implementation | [MetaJailbreak-VLM](https://github.com/Alibaba-VELLDEPTH/MetaJailbreak-VLM) |
 | Local manuscript | [LaTeX source](../acl_latex%20%281%29.tex) |
 | Paradigm overview | [intro.png](assets/intro.png) |
+| Method framework | [main.png](assets/main.png) |
 | Training dynamics | [training_curve.png](assets/training_curve.png) |
 
 ## Citation
